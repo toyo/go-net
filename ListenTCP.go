@@ -2,6 +2,7 @@ package net
 
 import (
 	traditionalnat "net"
+	"os"
 	"strconv"
 	"strings"
 
@@ -67,8 +68,15 @@ func ListenTCP(network string, laddr *traditionalnat.TCPAddr) (l *traditionalnat
 			logln(`NAT: IP address of this machine is unexpected IP/Mask ` + addrs[0].String())
 		}
 	}
-	laddr0, _ := traditionalnat.ResolveTCPAddr(`tcp`, l.Addr().String())
-	*laddr = *laddr0
-	logln(`[DEBUG] Without NAT: Listen on `, laddr)
+	_, ok := os.LookupEnv(`HTTPS_PROXY`)
+	if ok {
+		laddr0, _ := traditionalnat.ResolveTCPAddr(`tcp`, l.Addr().String())
+		laddr.IP = nil
+		logln(`[DEBUG] With Proxy: Listen on `, laddr0)
+	} else {
+		laddr0, _ := traditionalnat.ResolveTCPAddr(`tcp`, l.Addr().String())
+		*laddr = *laddr0
+		logln(`[DEBUG] Without NAT: Listen on `, laddr)
+	}
 	return l, nil
 }
