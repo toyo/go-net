@@ -86,7 +86,7 @@ func (s *httpProxy) Dial(network, addr string) (traditionalnet.Conn, error) {
 	return proxyconn, nil
 }
 
-func proxyDial(network, remote, httpproxy string) (conn traditionalnet.Conn, err error) {
+func proxyDial(network, remote, httpproxy string) (conn *traditionalnet.TCPConn, err error) {
 	var u *url.URL
 	u, err = url.Parse(httpproxy)
 	if err == nil {
@@ -94,14 +94,20 @@ func proxyDial(network, remote, httpproxy string) (conn traditionalnet.Conn, err
 		var d proxy.Dialer
 		d, err = proxy.FromURL(u, &dialer)
 		if err == nil {
-			conn, err = d.Dial(network, remote)
+			var c traditionalnet.Conn
+			c, err = d.Dial(network, remote)
+			var ok bool
+			conn, ok = c.(*traditionalnet.TCPConn)
+			if !ok {
+				return conn, errors.New(`No TCP`)
+			}
 		}
 	}
 	return
 }
 
-func proxyDialContext(ctx context.Context, network, remote, httpproxy string) (conn traditionalnet.Conn, err error) {
-	connch := make(chan traditionalnet.Conn)
+func proxyDialContext(ctx context.Context, network, remote, httpproxy string) (conn *traditionalnet.TCPConn, err error) {
+	connch := make(chan *traditionalnet.TCPConn)
 	errch := make(chan error)
 	go func() {
 		conn, err := proxyDial(network, remote, httpproxy)

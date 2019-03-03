@@ -7,25 +7,37 @@ import (
 )
 
 // Dial makes TCP connection.
-func Dial(network, remote string) (conn traditionalnet.Conn, err error) {
+func Dial(network, remote string) (conn *traditionalnet.TCPConn, err error) {
 	httpproxy := os.Getenv(`HTTPS_PROXY`)
 	if httpproxy != `` {
-		conn, err = proxyDial(network, remote, httpproxy)
+		return proxyDial(network, remote, httpproxy)
 	}
-	if conn == nil {
-		conn, err = traditionalnet.Dial(network, remote)
-	}
-	return conn, err
+	tcpaddr, _ := traditionalnet.ResolveTCPAddr(network, remote)
+	return traditionalnet.DialTCP(network, nil, tcpaddr)
 }
 
 // DialContext makes TCP connection.
-func DialContext(ctx context.Context, network, remote string) (traditionalnet.Conn, error) {
-	httpproxy := os.Getenv(`HTTPS_PROXY`)
-	if httpproxy != `` {
-		return proxyDialContext(ctx, network, remote, httpproxy)
-	} else {
-		var dialer traditionalnet.Dialer
-		return dialer.DialContext(ctx, network, remote)
-	}
+func DialContext(ctx context.Context, network, remote string) (conn *traditionalnet.TCPConn, err error) {
+	connch := make(chan *traditionalnet.TCPConn)
+	errch := make(chan error)
+	go func() {
+		conn, err := Dial(network, remote)
+		connch <- conn
+		errch <- err
+	}()
 
+	select {
+	case conn = <-connch:
+		err = <-errch
+		return
+	case <-ctx.Done():
+		remoteaddr, _ := traditionalnet.ResolveTCPAddr(network, remote)
+		err = &traditionalnet.OpError{
+			Op:     `connect`,
+			Net:    network,
+			Err:    ctx.Err(),
+			Addr:   remoteaddr,
+			Source: nil}
+		return
+	}
 }
